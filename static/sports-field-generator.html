@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sports Field Generator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0c0c0c;
+    color: #d8d8d8;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    display: flex;
+    min-height: 100vh;
+  }
+  #panel {
+    width: 256px;
+    min-width: 256px;
+    padding: 22px 16px;
+    background: #131313;
+    border-right: 1px solid #252525;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+  }
+  h1 {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: #fff;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #252525;
+  }
+  .g label {
+    display: block;
+    font-size: 9px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #555;
+    margin-bottom: 5px;
+  }
+  .g select {
+    width: 100%;
+    background: #1c1c1c;
+    color: #ccc;
+    border: 1px solid #333;
+    padding: 6px 8px;
+    font-size: 11px;
+    border-radius: 3px;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    outline: none;
+  }
+  .g select:focus { border-color: #555; }
+  .g input[type=range] { width: 100%; accent-color: #bbb; cursor: pointer; display: block; margin: 3px 0 0; }
+  .rl { display: flex; justify-content: space-between; font-size: 9px; color: #444; margin-top: 2px; }
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 9px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: opacity .12s;
+    margin-bottom: 6px;
+  }
+  .btn:last-child { margin-bottom: 0; }
+  .btn:hover { opacity: .82; }
+  .bp { background: #fff; color: #000; }
+  .bs { background: #252525; color: #aaa; }
+  hr { border: none; border-top: 1px solid #1e1e1e; }
+  #info { font-size: 9px; color: #333; letter-spacing: .05em; margin-top: 4px; }
+  #canvas-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+  #out { filter: drop-shadow(0 16px 60px rgba(0,0,0,.95)); }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>Field Generator</h1>
+
+  <div class="g">
+    <label>Primary Sport</label>
+    <select id="sp">
+      <option value="random">— Random —</option>
+      <option value="football">Football / Soccer</option>
+      <option value="basketball">Basketball</option>
+      <option value="tennis">Tennis</option>
+      <option value="athletics">Athletics</option>
+      <option value="hockey">Field Hockey</option>
+    </select>
+  </div>
+
+  <div class="g">
+    <label>Secondary Blend</label>
+    <select id="ss">
+      <option value="random">— Random Blend —</option>
+      <option value="none">None</option>
+      <option value="football">Football / Soccer</option>
+      <option value="basketball">Basketball</option>
+      <option value="tennis">Tennis</option>
+      <option value="athletics">Athletics</option>
+      <option value="hockey">Field Hockey</option>
+    </select>
+  </div>
+
+  <hr>
+
+  <div class="g">
+    <label>Density — <span id="dv">Med</span></label>
+    <input type="range" id="dn" min="1" max="3" step="1" value="2"
+      oninput="document.getElementById('dv').textContent=['Low','Med','High'][+this.value-1]">
+    <div class="rl"><span>Low</span><span>High</span></div>
+  </div>
+
+  <div class="g">
+    <label>Stroke Weight</label>
+    <input type="range" id="sw" min="0.5" max="1.8" step="0.1" value="1.0">
+    <div class="rl"><span>Thin</span><span>Bold</span></div>
+  </div>
+
+  <div class="g">
+    <label>Color Shift</label>
+    <input type="range" id="cr" min="0" max="5" step="1" value="0">
+    <div class="rl"><span>A</span><span>F</span></div>
+  </div>
+
+  <div class="g">
+    <label>Symmetry</label>
+    <select id="sym">
+      <option value="vertical">Vertical</option>
+      <option value="none">Asymmetric</option>
+      <option value="full">Full / Both Axes</option>
+    </select>
+  </div>
+
+  <hr>
+
+  <button class="btn bp" onclick="generate()">Generate</button>
+  <button class="btn bs" onclick="randomAll()">Randomize All</button>
+  <button class="btn bs" onclick="dlSVG()">Export SVG</button>
+
+  <div id="info">—</div>
+</div>
+
+<div id="canvas-area">
+  <div id="out"></div>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  GEOMETRY CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const W  = 420;
+const H  = 560;
+const M  = 28;           // outer margin
+const G  = 28;           // base grid unit
+const CR = 24;           // frame corner radius
+const BSW = 5.5;         // base stroke width
+
+const FL = M, FT = M, FR = W - M, FB = H - M;
+const FW = FR - FL, FH = FB - FT;
+const CX = W / 2, CY = H / 2;
+
+// Grid snap
+const SN = v => Math.round(v / G) * G;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PALETTE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// 6-color fixed palette
+const P = ['#E03040','#2490E8','#F0D020','#22A855','#FFFFFF','#F090B0'];
+// Names: red, blue, yellow, green, white, pink
+
+// Per-sport color index sequences
+const THEMES = {
+  football:   [4, 3, 2, 5, 1],   // white, green, yellow, pink, blue
+  basketball: [0, 1, 4, 2, 5],   // red, blue, white, yellow, pink
+  tennis:     [4, 3, 5, 1, 2],   // white, green, pink, blue, yellow
+  athletics:  [0, 2, 1, 4, 3],   // red, yellow, blue, white, green
+  hockey:     [3, 4, 0, 2, 1],   // green, white, red, yellow, blue
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SEEDED PRNG
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let RNG, SEED;
+function seed(s) {
+  SEED = s >>> 0;
+  let _s = SEED;
+  RNG = () => {
+    _s = (_s + 0x6D2B79F5) | 0;
+    let t = Math.imul(_s ^ (_s >>> 15), 1 | _s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const ri = (a,b) => Math.floor(RNG()*(b-a+1))+a;
+const rf = (a,b) => RNG()*(b-a)+a;
+const rc = a => a[Math.floor(RNG()*a.length)];
+const rb = (p=.5) => RNG()<p;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SVG HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const NS = 'http://www.w3.org/2000/svg';
+function e(tag, attr) {
+  const el = document.createElementNS(NS, tag);
+  for (const [k,v] of Object.entries(attr)) { if (v != null) el.setAttribute(k, v); }
+  return el;
+}
+
+const S = (c, w) => ({ stroke: c, 'stroke-width': w, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+
+function Line(x1,y1,x2,y2,c,w)    { return e('line',{x1,y1,x2,y2,...S(c,w)}); }
+function Circ(cx,cy,r,c,w)         { return e('circle',{cx,cy,r,...S(c,w)}); }
+function Dot(cx,cy,r,c)            { return e('circle',{cx,cy,r,fill:c}); }
+function Rect(x,y,W,H,c,w,rx=0)   { return e('rect',{x,y,width:W,height:H,rx,ry:rx,...S(c,w)}); }
+function Arc(cx,cy,r,s,en,c,w) {
+  const rad = d => d*Math.PI/180;
+  const x1 = cx+r*Math.cos(rad(s)),   y1 = cy+r*Math.sin(rad(s));
+  const x2 = cx+r*Math.cos(rad(en)), y2 = cy+r*Math.sin(rad(en));
+  const sp = ((en-s)+360)%360, lg = sp>180?1:0;
+  return e('path',{d:`M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 ${lg} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`,...S(c,w)});
+}
+
+// Corner L-mark
+function LMark(x,y,dx,dy,size,c,w) {
+  const g = e('g',{});
+  g.appendChild(Line(x, y, x+dx*size, y, c, w));
+  g.appendChild(Line(x, y, x, y+dy*size, c, w));
+  return g;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MULTI-COLORED BORDER
+//  Like the reference: each side segment has its own color, meeting at corners
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function drawBorder(g, colors, w) {
+  // Split each side into segments of different colors
+  // Use 4 colors cycling: top, right, bottom, left
+  const [ct, cr, cb, cl] = colors;
+  const r = CR; // corner radius
+
+  // Top edge (left to right, between corners)
+  g.appendChild(Line(FL+r, FT, FR-r, FT, ct, w));
+  // Right edge
+  g.appendChild(Line(FR, FT+r, FR, FB-r, cr, w));
+  // Bottom edge
+  g.appendChild(Line(FR-r, FB, FL+r, FB, cb, w));
+  // Left edge
+  g.appendChild(Line(FL, FB-r, FL, FT+r, cl, w));
+
+  // Corner arcs, each a blend of adjacent side colors
+  // TL: top-left
+  g.appendChild(Arc(FL+r, FT+r, r, 180, 270, ct, w));
+  // TR: top-right
+  g.appendChild(Arc(FR-r, FT+r, r, 270, 360, cr, w));
+  // BR: bottom-right
+  g.appendChild(Arc(FR-r, FB-r, r,   0,  90, cb, w));
+  // BL: bottom-left
+  g.appendChild(Arc(FL+r, FB-r, r,  90, 180, cl, w));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SPORT MODULES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Each sport module receives (target_group, stroke_width, theme_array, density, opts)
+// theme_array has 5 colors indexed 0-4
+
+function Football(g, sw, t, dn) {
+  // Halfway line
+  g.appendChild(Line(FL, CY, FR, CY, t[0], sw));
+
+  // Center circle
+  g.appendChild(Circ(CX, CY, G*3, t[1], sw));
+
+  // Penalty boxes top + bottom
+  const bW = G*5.5, bH = G*3.5;
+  g.appendChild(Rect(CX-bW/2, FT, bW, bH, t[2], sw));
+  g.appendChild(Rect(CX-bW/2, FB-bH, bW, bH, t[2], sw));
+
+  if (dn >= 2) {
+    // Goal areas
+    const gW = G*3, gH = G*1.5;
+    g.appendChild(Rect(CX-gW/2, FT, gW, gH, t[3], sw));
+    g.appendChild(Rect(CX-gW/2, FB-gH, gW, gH, t[3], sw));
+    // Penalty arcs
+    g.appendChild(Arc(CX, FT+bH+G*1.2, G*2.5, 180, 360, t[1], sw));
+    g.appendChild(Arc(CX, FB-bH-G*1.2, G*2.5,   0, 180, t[1], sw));
+  }
+
+  if (dn >= 3) {
+    // Corner arcs
+    const cr = G*0.9;
+    g.appendChild(Arc(FL, FT, cr,   0,  90, t[4], sw));
+    g.appendChild(Arc(FR, FT, cr,  90, 180, t[4], sw));
+    g.appendChild(Arc(FL, FB, cr, -90,   0, t[4], sw));
+    g.appendChild(Arc(FR, FB, cr, 180, 270, t[4], sw));
+    // Center spot
+    g.appendChild(Dot(CX, CY, 4, t[1]));
+  }
+}
+
+function Basketball(g, sw, t, dn) {
+  const kW = G*4, kH = G*5.5;
+  // Paint boxes
+  g.appendChild(Rect(CX-kW/2, FT, kW, kH, t[0], sw));
+  g.appendChild(Rect(CX-kW/2, FB-kH, kW, kH, t[0], sw));
+
+  // Free-throw arcs (dome on top of each box)
+  const ftR = G*2;
+  g.appendChild(Arc(CX, FT+kH, ftR,   0, 180, t[1], sw));
+  g.appendChild(Arc(CX, FB-kH, ftR, 180, 360, t[1], sw));
+
+  // 3-point arcs
+  const tpR = G*6.5;
+  g.appendChild(Arc(CX, FT+G*2,  tpR,  10, 170, t[2], sw));
+  g.appendChild(Arc(CX, FB-G*2,  tpR, 190, 350, t[2], sw));
+
+  if (dn >= 2) {
+    // Half-court + center circles
+    g.appendChild(Line(FL, CY, FR, CY, t[3], sw));
+    g.appendChild(Circ(CX, CY, G*2.5, t[0], sw));
+    g.appendChild(Circ(CX, CY, G*0.9, t[1], sw));
+  }
+
+  if (dn >= 3) {
+    // Restricted area arcs
+    g.appendChild(Arc(CX, FT+G*0.5, G*1.4,   0, 180, t[4], sw));
+    g.appendChild(Arc(CX, FB-G*0.5, G*1.4, 180, 360, t[4], sw));
+  }
+}
+
+function Tennis(g, sw, t, dn) {
+  const sM  = G*1.5;
+  const svcD = FH * 0.37;
+
+  // Net line
+  g.appendChild(Line(FL, CY, FR, CY, t[0], sw));
+  // Service lines
+  g.appendChild(Line(FL, FT+svcD, FR, FT+svcD, t[1], sw));
+  g.appendChild(Line(FL, FB-svcD, FR, FB-svcD, t[1], sw));
+  // Center service line
+  g.appendChild(Line(CX, FT+svcD, CX, FB-svcD, t[2], sw));
+
+  if (dn >= 2) {
+    // Doubles alleys
+    g.appendChild(Line(FL+sM, FT, FL+sM, FB, t[3], sw));
+    g.appendChild(Line(FR-sM, FT, FR-sM, FB, t[3], sw));
+  }
+
+  if (dn >= 3) {
+    // Center marks
+    const cm = G*0.6;
+    g.appendChild(Line(CX, FT,    CX, FT+cm, t[0], sw));
+    g.appendChild(Line(CX, FB-cm, CX, FB,    t[0], sw));
+  }
+}
+
+function Athletics(g, sw, t, dn) {
+  const tCY = FT + FH*0.72;
+  const tTY = FT + FH*0.28;
+  const nL   = dn >= 3 ? 4 : dn >= 2 ? 3 : 2;
+  const gap  = G*1.5;
+
+  for (let i=0; i<nL; i++) {
+    const r = G*3 + i*gap;
+    g.appendChild(Arc(CX, tCY, r, 180, 360, i%2===0?t[0]:t[1], sw));
+  }
+  for (let i=0; i<Math.min(nL,2); i++) {
+    const r = G*3 + i*gap;
+    g.appendChild(Arc(CX, tTY, r,   0, 180, i%2===0?t[1]:t[2], sw));
+  }
+
+  // Straight lanes
+  const iR = G*3;
+  g.appendChild(Line(CX-iR, tTY, CX-iR, tCY, t[3], sw));
+  g.appendChild(Line(CX+iR, tTY, CX+iR, tCY, t[3], sw));
+
+  if (dn >= 2) {
+    const oR = G*3 + (nL-1)*gap;
+    g.appendChild(Line(CX-oR, tTY, CX-oR, tCY, t[0], sw));
+    g.appendChild(Line(CX+oR, tTY, CX+oR, tCY, t[0], sw));
+  }
+  if (dn >= 3) {
+    g.appendChild(Circ(CX, CY, G*1.5, t[4], sw));
+  }
+}
+
+function Hockey(g, sw, t, dn) {
+  // Shooting D-circles
+  const dR = G*4.5;
+  g.appendChild(Arc(CX, FT, dR, 0, 180, t[0], sw));
+  g.appendChild(Arc(CX, FB, dR, 180, 360, t[0], sw));
+
+  // Centre line
+  g.appendChild(Line(FL, CY, FR, CY, t[1], sw));
+
+  // 25-yard lines
+  const y25 = FH/4;
+  g.appendChild(Line(FL, FT+y25, FR, FT+y25, t[2], sw));
+  g.appendChild(Line(FL, FB-y25, FR, FB-y25, t[2], sw));
+
+  if (dn >= 2) {
+    const gW = G*2.5, gH = G*1;
+    g.appendChild(Rect(CX-gW/2, FT,     gW, gH, t[3], sw));
+    g.appendChild(Rect(CX-gW/2, FB-gH,  gW, gH, t[3], sw));
+    g.appendChild(Circ(CX, CY, G*1.5, t[0], sw));
+  }
+  if (dn >= 3) {
+    g.appendChild(Dot(CX, FT+G*2.5, 4, t[1]));
+    g.appendChild(Dot(CX, FB-G*2.5, 4, t[1]));
+  }
+}
+
+const SPORTS = { football:Football, basketball:Basketball, tennis:Tennis, athletics:Athletics, hockey:Hockey };
+const SKEYS = Object.keys(SPORTS);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COMPOSER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function compose(params) {
+  const { sp, ss, dn, sw: swMult, cr: cShift } = params;
+
+  const strokeW = BSW * swMult;
+
+  // Resolve sports
+  const pSport = sp === 'random' ? rc(SKEYS) : sp;
+  let sSport = ss;
+  if (ss === 'random') sSport = rc(SKEYS.filter(k=>k!==pSport));
+  const hasSecondary = sSport && sSport !== 'none' && SPORTS[sSport];
+
+  // Primary theme (5 colors, shifted by user param)
+  const pThemeIdx = THEMES[pSport] || THEMES.football;
+  const pTheme = pThemeIdx.map(i => P[(i + cShift) % P.length]);
+
+  // Secondary theme (uses remaining colors)
+  const usedSet = new Set(pTheme);
+  const remaining = P.filter(c => !usedSet.has(c));
+  const sTheme = [
+    remaining[0] || P[5],
+    remaining[1] || P[2],
+    remaining[2] || P[0],
+    P[5],
+    P[2],
+  ];
+
+  // Border: 4 sides, each a different color from palette
+  // Pick 4 distinct colors cycling through palette
+  const borderCols = [
+    P[(pThemeIdx[2] + cShift) % P.length],  // top
+    P[(pThemeIdx[1] + cShift) % P.length],  // right
+    P[(pThemeIdx[0] + cShift) % P.length],  // bottom
+    P[(pThemeIdx[3] + cShift) % P.length],  // left
+  ];
+
+  // Build SVG
+  const svg = e('svg', { width:W, height:H, viewBox:`0 0 ${W} ${H}`, xmlns:NS, style:'display:block' });
+
+  // Defs + clip
+  const defs = e('defs', {});
+  const cp = e('clipPath', { id:'fc' });
+  cp.appendChild(Rect(FL, FT, FW, FH, '#fff', 1, CR));
+  defs.appendChild(cp);
+  svg.appendChild(defs);
+
+  // Black background
+  svg.appendChild(e('rect', { x:0, y:0, width:W, height:H, fill:'#000' }));
+
+  // Clipped group
+  const g = e('g', { 'clip-path':'url(#fc)' });
+  svg.appendChild(g);
+
+  // ── Draw primary sport
+  SPORTS[pSport](g, strokeW, pTheme, dn);
+
+  // ── Draw secondary sport (lower weight, distinct colors)
+  if (hasSecondary) {
+    const sg = e('g', { opacity:'0.72' });
+    g.appendChild(sg);
+    SPORTS[sSport](sg, strokeW * 0.85, sTheme, Math.max(1, dn - 1));
+  }
+
+  // ── Multi-colored border (drawn on top within clip)
+  drawBorder(g, borderCols, strokeW);
+
+  // ── Corner accent L-marks (pink — like the reference image)
+  const accentColor = P[5]; // pink
+  const lSize = G * 0.9;
+  g.appendChild(LMark(FL, FT,  1,  1, lSize, accentColor, strokeW));
+  g.appendChild(LMark(FR, FT, -1,  1, lSize, accentColor, strokeW));
+  g.appendChild(LMark(FL, FB,  1, -1, lSize, accentColor, strokeW));
+  g.appendChild(LMark(FR, FB, -1, -1, lSize, accentColor, strokeW));
+
+  return { svg, pSport, sSport };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  UI
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function readParams() {
+  return {
+    sp:  document.getElementById('sp').value,
+    ss:  document.getElementById('ss').value,
+    sym: document.getElementById('sym').value,
+    dn:  +document.getElementById('dn').value,
+    sw:  +document.getElementById('sw').value,
+    cr:  +document.getElementById('cr').value,
+  };
+}
+
+function generate() {
+  const params = readParams();
+  const { svg, pSport, sSport } = compose(params);
+  const out = document.getElementById('out');
+  out.innerHTML = '';
+  out.appendChild(svg);
+  const secStr = sSport && sSport !== 'none' ? ` + ${sSport}` : '';
+  document.getElementById('info').textContent = `seed ${SEED} · ${pSport}${secStr}`;
+}
+
+function randomAll() {
+  seed(Math.floor(Math.random() * 9999999));
+  const pick = (sel, opts) => { sel.value = rc(opts); };
+  pick(document.getElementById('sp'), SKEYS.concat(['random']));
+  pick(document.getElementById('ss'), SKEYS.concat(['none','random']));
+  pick(document.getElementById('sym'), ['vertical','none','full']);
+  const dn = ri(1,3);
+  document.getElementById('dn').value = dn;
+  document.getElementById('dv').textContent = ['Low','Med','High'][dn-1];
+  document.getElementById('sw').value = rf(.6, 1.7).toFixed(1);
+  document.getElementById('cr').value = ri(0,5);
+  generate();
+}
+
+function dlSVG() {
+  const svg = document.querySelector('#out svg');
+  if (!svg) return;
+  const blob = new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n`+svg.outerHTML], { type:'image/svg+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `field-${SEED}.svg`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Boot
+seed(Math.floor(Math.random() * 9999999));
+generate();
+</script>
+</body>
+</html>
