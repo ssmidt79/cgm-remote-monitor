@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Dice Roller</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      background-color: #3EB649;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Top navigation bar ── */
+    .navbar {
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+      position: relative;
+      z-index: 10;
+      flex-shrink: 0;
+    }
+
+    .navbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* IKEA badge */
+    .ikea-badge {
+      width: 44px;
+      height: 28px;
+      background: #0058A3;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ikea-badge-inner {
+      background: #FFDA1A;
+      width: 38px;
+      height: 22px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ikea-badge-text {
+      font-size: 9px;
+      font-weight: 900;
+      color: #0058A3;
+      letter-spacing: 0.5px;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    .navbar-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: #1a1a1a;
+      letter-spacing: -0.2px;
+    }
+
+    .navbar-globe {
+      width: 36px;
+      height: 36px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+    }
+
+    /* ── Background decorative curves ── */
+    .bg-curves {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Main content area ── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 1;
+      padding-bottom: 60px;
+    }
+
+    /* ── Dice wrapper ── */
+    .dice-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ── Dice face ── */
+    .dice {
+      width: 160px;
+      height: 160px;
+      background: #fff;
+      border-radius: 24px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      padding: 24px;
+      gap: 0;
+      position: relative;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      will-change: transform;
+      transition: transform 0.08s ease;
+    }
+
+    .dice:active {
+      transform: scale(0.96);
+    }
+
+    /* Dot grid positions (3×3, 9 cells) */
+    .dot {
+      width: 20px;
+      height: 20px;
+      background: #111;
+      border-radius: 50%;
+      align-self: center;
+      justify-self: center;
+      display: none;
+    }
+
+    /* Cells: top-left=1, top-center=2, top-right=3
+              mid-left=4, mid-center=5, mid-right=6
+              bot-left=7, bot-center=8, bot-right=9  */
+    .dot-1  { grid-area: 1 / 1; } /* top-left */
+    .dot-2  { grid-area: 1 / 3; } /* top-right */
+    .dot-3  { grid-area: 2 / 1; } /* mid-left */
+    .dot-4  { grid-area: 2 / 2; } /* mid-center */
+    .dot-5  { grid-area: 2 / 3; } /* mid-right */
+    .dot-6  { grid-area: 3 / 1; } /* bot-left */
+    .dot-7  { grid-area: 3 / 2; } /* bot-center */
+    .dot-8  { grid-area: 3 / 3; } /* bot-right */
+
+    /* ── Face states ── */
+    /* Face 1 */
+    .face-1 .dot-4 { display: block; }
+
+    /* Face 2 */
+    .face-2 .dot-2 { display: block; }
+    .face-2 .dot-6 { display: block; }
+
+    /* Face 3 */
+    .face-3 .dot-2 { display: block; }
+    .face-3 .dot-4 { display: block; }
+    .face-3 .dot-6 { display: block; }
+
+    /* Face 4 */
+    .face-4 .dot-1 { display: block; }
+    .face-4 .dot-2 { display: block; }
+    .face-4 .dot-6 { display: block; }
+    .face-4 .dot-8 { display: block; }
+
+    /* Face 5 */
+    .face-5 .dot-1 { display: block; }
+    .face-5 .dot-2 { display: block; }
+    .face-5 .dot-4 { display: block; }
+    .face-5 .dot-6 { display: block; }
+    .face-5 .dot-8 { display: block; }
+
+    /* Face 6 */
+    .face-6 .dot-1 { display: block; }
+    .face-6 .dot-2 { display: block; }
+    .face-6 .dot-3 { display: block; }
+    .face-6 .dot-5 { display: block; }
+    .face-6 .dot-6 { display: block; }
+    .face-6 .dot-8 { display: block; }
+
+    /* ── Roll animation ── */
+    @keyframes roll {
+      0%   { transform: rotate(0deg) scale(1); }
+      15%  { transform: rotate(-8deg) scale(0.94); }
+      35%  { transform: rotate(10deg) scale(0.90); }
+      55%  { transform: rotate(-6deg) scale(0.93); }
+      72%  { transform: rotate(4deg) scale(0.97); }
+      85%  { transform: rotate(-2deg) scale(0.99); }
+      93%  { transform: rotate(1deg) scale(1.01); }
+      100% { transform: rotate(0deg) scale(1); }
+    }
+
+    .dice.rolling {
+      animation: roll 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    }
+
+    /* ── Caption ── */
+    .dice-caption {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: 0.1px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation bar -->
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <div class="ikea-badge">
+        <div class="ikea-badge-inner">
+          <span class="ikea-badge-text">IKEA</span>
+        </div>
+      </div>
+      <span class="navbar-title">IKEA Foundation</span>
+    </div>
+    <div class="navbar-globe">
+      <!-- Globe SVG icon -->
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M2 12h20"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+    </div>
+  </nav>
+
+  <!-- Background decorative curves -->
+  <svg class="bg-curves" viewBox="0 0 390 750" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M -30 80 Q 200 200 420 50" stroke="rgba(255,255,255,0.45)" stroke-width="1.2" fill="none"/>
+    <path d="M -30 110 Q 220 260 450 80" stroke="rgba(255,255,255,0.25)" stroke-width="1" fill="none"/>
+    <path d="M 300 700 Q 100 500 420 320" stroke="rgba(255,255,255,0.35)" stroke-width="1.2" fill="none"/>
+  </svg>
+
+  <!-- Main content -->
+  <main class="main">
+    <div class="dice-wrapper" id="diceWrapper" role="button" aria-label="Roll the dice" tabindex="0">
+      <!-- Dice -->
+      <div class="dice face-1" id="dice">
+        <div class="dot dot-1"></div>
+        <div class="dot dot-2"></div>
+        <div class="dot dot-3"></div>
+        <div class="dot dot-4"></div>
+        <div class="dot dot-5"></div>
+        <div class="dot dot-6"></div>
+        <div class="dot dot-7"></div>
+        <div class="dot dot-8"></div>
+      </div>
+      <span class="dice-caption">Tap to roll the dice</span>
+    </div>
+  </main>
+
+  <script>
+    const dice = document.getElementById('dice');
+    const wrapper = document.getElementById('diceWrapper');
+    let isRolling = false;
+
+    function roll() {
+      if (isRolling) return;
+      isRolling = true;
+
+      const result = Math.floor(Math.random() * 6) + 1;
+
+      // Remove current face class and start animation
+      dice.className = 'dice rolling';
+
+      // Swap to result face just before animation ends
+      setTimeout(() => {
+        dice.classList.remove('rolling');
+        dice.classList.add('face-' + result);
+        isRolling = false;
+      }, 380);
+    }
+
+    wrapper.addEventListener('click', roll);
+    wrapper.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') roll();
+    });
+  </script>
+
+</body>
+</html>
