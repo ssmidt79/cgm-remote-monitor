@@ -208,6 +208,11 @@ function create (env, ctx) {
       , title: 'Profile Editor'
       , type: 'profile'
     }
+    , "/lager": {
+      file: "lagerindex.html"
+      , title: 'Diabetesudstyr Lager'
+      , type: 'lager'
+    }
     , "/report": {
       file: "reportindex.html"
       , title: 'Nightscout reporting'
